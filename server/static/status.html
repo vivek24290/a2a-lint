@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>a2a-watch — Agent Monitor</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #141821; --card: #1b2130; --border: #2a3245;
+    --text: #e4e8f1; --muted: #94a0b8; --accent: #7c5cff; --accent2: #4bc0a9;
+    --err: #ff6b6b; --ok: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.5; }
+  header { padding: 26px 32px 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 24px; }
+  header h1 .scope { color: var(--accent2); }
+  header .tag { color: var(--muted); font-size: 14px; }
+  header a { color: var(--accent); font-size: 14px; margin-left: auto; }
+  .bar { display: flex; gap: 10px; padding: 16px 32px; flex-wrap: wrap; }
+  input { background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 13px; font-size: 14px; }
+  #m-url { flex: 2; min-width: 240px; } #m-name { flex: 1; min-width: 140px; }
+  #m-interval { width: 110px; } #m-webhook { flex: 2; min-width: 220px; }
+  button { border: none; border-radius: 8px; padding: 10px 16px; font-size: 14px;
+    font-weight: 600; cursor: pointer; color: #fff; background: var(--accent2); }
+  button.danger { background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-weight: 400; padding: 5px 10px; font-size: 12.5px; }
+  button.danger:hover { color: var(--err); border-color: var(--err); }
+  .agents { padding: 8px 32px 40px; display: grid; gap: 14px; }
+  .agent { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .state { font-size: 13px; font-weight: 800; border-radius: 8px; padding: 6px 12px; }
+  .state.up { background: #12351f; color: var(--ok); }
+  .state.down { background: #3a1518; color: var(--err); }
+  .state.pending { background: var(--card); color: var(--muted); }
+  .who { min-width: 220px; }
+  .who .name { font-weight: 700; }
+  .who .url { color: var(--muted); font-size: 12.5px; word-break: break-all; }
+  .stat { text-align: center; min-width: 84px; }
+  .stat .v { font-size: 17px; font-weight: 700; }
+  .stat .k { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; }
+  .dots { display: flex; gap: 3px; align-items: center; }
+  .dot { width: 9px; height: 16px; border-radius: 2px; background: var(--card); }
+  .dot.up { background: var(--ok); } .dot.down { background: var(--err); }
+  .placeholder { color: var(--muted); padding: 20px 32px; }
+  footer { color: var(--muted); font-size: 12.5px; padding: 0 32px 28px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>a2a-<span class="scope">watch</span></h1>
+  <span class="tag">Your agents, probed every few minutes — know they're down before your users' agents do</span>
+  <a href="/">← playground</a>
+</header>
+
+<div class="bar">
+  <input id="m-url" placeholder="Agent base URL (e.g. http://host.docker.internal:8001)">
+  <input id="m-name" placeholder="Name (optional)">
+  <input id="m-interval" type="number" value="60" min="30" title="Probe interval, seconds">
+  <input id="m-webhook" placeholder="Alert webhook URL (optional — receives down/recovered JSON)">
+  <button onclick="addAgent()">Watch agent</button>
+</div>
+
+<div class="agents" id="agents"><div class="placeholder">No agents monitored yet — add one above.
+Each probe = card fetch + validation + live message/send (the same check a2a-lint runs in CI).</div></div>
+
+<footer>Probes run in the playground server; history in <code>data/monitor.db</code>. Part of
+<a href="https://github.com/vivek24290/a2a-lint" style="color:var(--accent)">a2a-lint</a>.</footer>
+
+<script>
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const $ = id => document.getElementById(id);
+
+async function refresh() {
+  const agents = await (await fetch("/api/monitor/agents")).json();
+  if (!agents.length) return;
+  $("agents").innerHTML = agents.map(a => {
+    const lc = a.lastCheck;
+    const state = lc === null ? ["pending", "PROBING…"] : lc.ok ? ["up", "UP"] : ["down", "DOWN"];
+    return `
+    <div class="agent">
+      <span class="state ${state[0]}">${state[1]}</span>
+      <div class="who">
+        <div class="name">${esc(a.name || "(unnamed)")}</div>
+        <div class="url">${esc(a.url)}</div>
+      </div>
+      <div class="stat"><div class="v">${a.uptime24h === null ? "—" : a.uptime24h + "%"}</div><div class="k">uptime 24h</div></div>
+      <div class="stat"><div class="v">${lc?.grade ?? "—"}</div><div class="k">grade</div></div>
+      <div class="stat"><div class="v">${lc?.latencyMs ?? "—"}</div><div class="k">ms</div></div>
+      <div class="stat"><div class="v">${a.intervalSeconds}s</div><div class="k">interval</div></div>
+      <div class="dots" title="last ${a.recent.length} checks (oldest → newest)">
+        ${a.recent.map(ok => `<span class="dot ${ok ? "up" : "down"}"></span>`).join("")}
+      </div>
+      <button class="danger" onclick="removeAgent(${a.id})">stop watching</button>
+    </div>`;
+  }).join("");
+}
+
+async function addAgent() {
+  const url = $("m-url").value.trim();
+  if (!url) return;
+  await fetch("/api/monitor/agents", { method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url, name: $("m-name").value.trim() || null,
+      intervalSeconds: parseInt($("m-interval").value) || 300,
+      webhook: $("m-webhook").value.trim() || null,
+    }) });
+  $("m-url").value = ""; $("m-name").value = "";
+  setTimeout(refresh, 500);
+}
+
+async function removeAgent(id) {
+  await fetch(`/api/monitor/agents/${id}`, { method: "DELETE" });
+  refresh();
+}
+
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

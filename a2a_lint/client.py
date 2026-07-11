@@ -9,6 +9,7 @@ show developers what actually happened on the wire.
 This module is the shared core of all a2a-lint layers:
 playground, lint CLI/CI action, and (future) a2a-watch monitor probes.
 """
+import json
 import time
 import uuid
 
@@ -90,6 +91,38 @@ class A2AClient:
     async def send_message(self, endpoint: str, text: str, context_id: str | None = None) -> dict:
         """JSON-RPC message/send. Returns request, response and latency."""
         return await self._rpc(endpoint, build_rpc_request("message/send", text, context_id))
+
+    async def stream_message(self, endpoint: str, text: str, max_events: int = 50) -> dict:
+        """JSON-RPC message/stream over SSE. Collects events until a final
+        status-update, max_events, or stream end. Returns wire-level detail."""
+        rpc_request = build_rpc_request("message/stream", text)
+        events: list[dict] = []
+        start = time.perf_counter()
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+            async with client.stream("POST", endpoint, json=rpc_request) as resp:
+                status = resp.status_code
+                content_type = resp.headers.get("content-type", "")
+                if status == 200 and "text/event-stream" in content_type:
+                    async for line in resp.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        try:
+                            payload = json.loads(line[5:].strip())
+                        except ValueError:
+                            events.append({"invalidJson": line[:200]})
+                            continue
+                        events.append(payload)
+                        result = payload.get("result") or {}
+                        if result.get("final") or len(events) >= max_events:
+                            break
+        return {
+            "endpoint": endpoint,
+            "request": rpc_request,
+            "events": events,
+            "httpStatus": status,
+            "contentType": content_type,
+            "latencyMs": round((time.perf_counter() - start) * 1000),
+        }
 
     async def get_task(self, endpoint: str, task_id: str) -> dict:
         """JSON-RPC tasks/get. Returns request, response and latency."""

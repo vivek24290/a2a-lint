@@ -1,0 +1,22 @@
+# Publishes a2a-lint to PyPI whenever a GitHub Release is published.
+# Uses PyPI "trusted publishing" (OIDC) — no API token stored in the repo.
+# One-time setup on pypi.org: Your projects -> Publishing -> add GitHub
+# publisher: owner=vivek24290, repo=a2a-lint, workflow=publish.yml.
+name: publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build && python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1

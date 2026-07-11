@@ -14,9 +14,11 @@ NOTE for public hosting: this proxy fetches URLs the user supplies (that is
 its purpose — including agents on private networks during development). Before
 exposing an instance to the internet, consider restricting target hosts.
 """
+import asyncio
 import json
 import os
 import time
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -25,16 +27,26 @@ from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from a2a_client import A2AClient, A2AProbeError, build_rpc_request
-from card_validator import summarize, validate_card
+from a2a_lint import A2AClient, A2AProbeError, build_rpc_request, summarize, validate_card
+from monitor import Monitor
 from store import SessionStore
 
-app = FastAPI(title="a2a-lint")
+DATA_DIR = os.environ.get("DATA_DIR", "data")
+sessions = SessionStore(os.path.join(DATA_DIR, "sessions.db"))
+monitor = Monitor(os.path.join(DATA_DIR, "monitor.db"))
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    scheduler = asyncio.create_task(monitor.run_loop())
+    yield
+    scheduler.cancel()
+
+
+app = FastAPI(title="a2a-lint", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
-
-sessions = SessionStore(os.path.join(os.environ.get("DATA_DIR", "data"), "sessions.db"))
 
 
 class InspectRequest(BaseModel):
@@ -119,6 +131,37 @@ async def get_session(session_id: str):
     if payload is None:
         raise HTTPException(status_code=404, detail="No such session")
     return payload
+
+
+# --- a2a-watch monitor (MVP): scheduled probes + webhook alerts ------------
+
+class MonitorAddRequest(BaseModel):
+    url: str
+    name: str | None = None
+    intervalSeconds: int = 300
+    webhook: str | None = None
+
+
+@app.post("/api/monitor/agents")
+async def monitor_add(req: MonitorAddRequest):
+    return monitor.add_agent(req.url, req.name, req.intervalSeconds, req.webhook)
+
+
+@app.get("/api/monitor/agents")
+async def monitor_list():
+    return monitor.list_agents()
+
+
+@app.delete("/api/monitor/agents/{agent_id}")
+async def monitor_remove(agent_id: int):
+    if not monitor.remove_agent(agent_id):
+        raise HTTPException(status_code=404, detail="No such monitored agent")
+    return {"removed": agent_id}
+
+
+@app.get("/api/monitor/agents/{agent_id}/checks")
+async def monitor_checks(agent_id: int, limit: int = 50):
+    return monitor.checks(agent_id, min(limit, 500))
 
 
 # --- Conformance badge: live-graded SVG for READMEs ------------------------

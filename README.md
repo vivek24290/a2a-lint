@@ -40,8 +40,8 @@ viewer, and shareable permalinks of inspection snapshots.
 ## CLI
 
 ```bash
-cd server && pip install -r requirements.txt
-python a2a_lint.py https://my-agent.example.com --live
+pip install git+https://github.com/vivek24290/a2a-lint@develop   # PyPI release coming
+a2a-lint https://my-agent.example.com --live
 ```
 
 ```
@@ -54,7 +54,7 @@ GRADE B — 0 error(s), 1 warning(s)
 
 | Flag | Effect |
 |---|---|
-| `--live` | also send a real `message/send` and verify the result is a Task/Message |
+| `--live` | also send a real `message/send` and verify the result is a Task/Message; if the card declares `streaming: true`, `message/stream` SSE conformance is checked too |
 | `--strict` | warnings fail the lint too |
 | `--json` | machine-readable output |
 
@@ -94,28 +94,49 @@ undeclared auth — each finding carries a level (`error`/`warn`/`info`) and a
 concrete fix hint. Grades: A (clean) → F. See `server/card_validator.py`; the
 same core powers the CLI, the Action, the badge, and the playground.
 
+## a2a-watch monitor (MVP)
+
+Open **/status.html** on your playground instance: register any agent and it
+gets probed on a schedule (card fetch + validation + live `message/send` —
+the same check the CLI runs). You get UP/DOWN state, 24h uptime, conformance
+grade, latency, and a **webhook alert** (JSON `down`/`recovered` events —
+point it at Slack/Discord/anything) the moment an agent breaks or recovers.
+
+```bash
+curl -X POST localhost:8090/api/monitor/agents -H 'Content-Type: application/json' \
+  -d '{"url": "https://my-agent.example.com", "intervalSeconds": 300,
+       "webhook": "https://hooks.slack.com/services/..."}'
+```
+
+History lives in `data/monitor.db`. If an agent's card advertises an
+unreachable `url`, the monitor falls back to the registered URL and reports
+the bad card instead of a false DOWN.
+
 ## Architecture
 
 ```
+a2a_lint/              the pip-installable package (shared core)
+├── client.py          A2A client: card discovery, message/send, tasks/get, streaming
+├── validator.py       spec checks -> structured findings
+└── cli.py             the a2a-lint command (exit codes 0/1/2)
 server/
-├── a2a_client.py      A2A client: card discovery, message/send, tasks/get, streaming
-├── card_validator.py  spec checks -> structured findings (the shared core)
-├── a2a_lint.py        CLI (exit codes 0/1/2)
-├── main.py            FastAPI: playground API, SSE proxy, permalinks, badge
-└── static/index.html  playground UI
+├── main.py            FastAPI: playground API, SSE proxy, permalinks, badge, monitor API
+├── monitor.py         a2a-watch core: scheduler, uptime history, webhook alerts
+└── static/            playground UI (index.html) + monitor UI (status.html)
 action.yml             GitHub Action wrapping the CLI
 ```
 
-No LLM calls, no telemetry, no external services. Permalink snapshots are
-stored in a local SQLite file under `./data/`.
+No LLM calls, no telemetry, no external services. Permalink snapshots and
+monitor history are SQLite files under `./data/`.
 
 ## Roadmap
 
-- [ ] `pip install a2a-lint` packaging
-- [ ] `message/stream` conformance checks in the CLI
-- [ ] Security-scheme validation (per-scheme checks)
-- [ ] **a2a-watch** — hosted monitoring: scheduled probes of your deployed
-      agents, alerting, uptime history, public status pages
+- [x] `pip install a2a-lint` packaging (PyPI publish via `.github/workflows/publish.yml`)
+- [x] `message/stream` conformance checks in the CLI
+- [x] Security-scheme validation
+- [x] **a2a-watch** monitor MVP: scheduled probes, uptime history, webhook alerts
+- [ ] Hosted a2a-watch: accounts, public status pages, e-mail alerts, paid tiers
+- [ ] Public playground instance (VPS + domain)
 
 ## License
 

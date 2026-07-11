@@ -1,6 +1,8 @@
 services:
   playground:
-    build: ./server
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     ports:
       - "8090:8090"
     environment:

@@ -2,11 +2,12 @@
 """
 a2a-lint — conformance linter for A2A agents.
 
-    python a2a_lint.py <agent-base-url> [--live] [--strict] [--json]
+    a2a-lint <agent-base-url> [--live] [--strict] [--json]
 
 Checks the agent card against the A2A spec (same validator core as the
 bundled playground). With --live it also performs a real message/send
-round trip and verifies the result is a well-formed Task or Message.
+round trip and verifies the result is a well-formed Task or Message; if
+the card declares streaming, message/stream conformance is checked too.
 
 Exit codes (CI-friendly):
     0  conformant (warnings allowed unless --strict)
@@ -18,8 +19,8 @@ import asyncio
 import json
 import sys
 
-from a2a_client import A2AClient, A2AProbeError
-from card_validator import summarize, validate_card
+from a2a_lint.client import A2AClient, A2AProbeError
+from a2a_lint.validator import summarize, validate_card
 
 RESET, BOLD, RED, YELLOW, BLUE, GREEN, DIM = (
     "\033[0m", "\033[1m", "\033[31m", "\033[33m", "\033[34m", "\033[32m", "\033[2m",
@@ -75,6 +76,45 @@ async def lint(url: str, live: bool, timeout: float) -> tuple[list[dict], dict]:
                         "(a container-internal hostname on a public card is a common mistake).",
             })
 
+        # If the card promises streaming, hold it to that promise.
+        if (probe["card"].get("capabilities") or {}).get("streaming") is True:
+            try:
+                stream = await client.stream_message(endpoint, "a2a-lint stream probe")
+                if stream["httpStatus"] != 200:
+                    findings.append({
+                        "level": "error", "field": "(live-stream)",
+                        "message": f"message/stream returned HTTP {stream['httpStatus']} "
+                                   "but the card declares streaming: true.",
+                        "hint": "Either implement message/stream or declare streaming: false.",
+                    })
+                elif "text/event-stream" not in stream["contentType"]:
+                    findings.append({
+                        "level": "error", "field": "(live-stream)",
+                        "message": f"message/stream responded with Content-Type "
+                                   f"'{stream['contentType']}' instead of text/event-stream.",
+                        "hint": "A2A streaming uses Server-Sent Events.",
+                    })
+                elif not stream["events"]:
+                    findings.append({
+                        "level": "error", "field": "(live-stream)",
+                        "message": "message/stream opened but produced no SSE events.",
+                        "hint": "",
+                    })
+                else:
+                    if not any((e.get("result") or {}).get("final") for e in stream["events"]):
+                        findings.append({
+                            "level": "warn", "field": "(live-stream)",
+                            "message": "Stream ended without a final status-update event.",
+                            "hint": 'The last status-update should carry "final": true.',
+                        })
+                    meta["streamEvents"] = len(stream["events"])
+            except Exception as exc:  # noqa: BLE001
+                findings.append({
+                    "level": "error", "field": "(live-stream)",
+                    "message": f"message/stream failed: {type(exc).__name__}: {exc}",
+                    "hint": "The card declares streaming: true — clients will rely on it.",
+                })
+
     return findings, meta
 
 
@@ -107,6 +147,8 @@ def main() -> int:
               + f" — card at {meta['cardUrl']} ({meta['latencyMs']} ms)")
         if "liveRoundTripMs" in meta:
             print(paint(f"✔ live message/send round trip in {meta['liveRoundTripMs']} ms", GREEN, color))
+        if "streamEvents" in meta:
+            print(paint(f"✔ message/stream delivered {meta['streamEvents']} SSE event(s)", GREEN, color))
         grade_color = GREEN if summary["grade"] in "AB" else (YELLOW if summary["grade"] == "C" else RED)
         print(paint(f"GRADE {summary['grade']}", BOLD + grade_color, color)
               + f" — {summary['errors']} error(s), {summary['warnings']} warning(s)")

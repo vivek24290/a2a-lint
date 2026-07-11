@@ -20,13 +20,13 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Install dependency
+    - name: Install a2a-lint
       shell: bash
-      run: pip install --quiet "httpx>=0.27"
+      run: pip install --quiet "${{ github.action_path }}"
     - name: Run a2a-lint
       shell: bash
       run: |
         FLAGS=""
         [ "${{ inputs.live }}" = "true" ] && FLAGS="$FLAGS --live"
         [ "${{ inputs.strict }}" = "true" ] && FLAGS="$FLAGS --strict"
-        python "${{ github.action_path }}/server/a2a_lint.py" "${{ inputs.url }}" $FLAGS
+        a2a-lint "${{ inputs.url }}" $FLAGS

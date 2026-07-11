@@ -13,6 +13,7 @@ monitor's conformance probes (phase 3).
 """
 
 KNOWN_TRANSPORTS = {"JSONRPC", "GRPC", "HTTP+JSON"}
+KNOWN_SECURITY_TYPES = {"apiKey", "http", "oauth2", "openIdConnect", "mutualTLS"}
 
 
 def validate_card(card: dict, deprecated_path: bool = False) -> list[dict]:
@@ -115,6 +116,37 @@ def validate_card(card: dict, deprecated_path: bool = False) -> list[dict]:
                     "Example prompts help other agents (and their LLMs) phrase requests correctly.")
 
     # --- security ----------------------------------------------------------
+    schemes = card.get("securitySchemes")
+    if schemes is not None:
+        if not isinstance(schemes, dict):
+            add("error", "securitySchemes", "'securitySchemes' must be an object mapping names to schemes.")
+            schemes = {}
+        else:
+            for name, scheme in schemes.items():
+                where = f"securitySchemes.{name}"
+                if not isinstance(scheme, dict):
+                    add("error", where, "Each security scheme must be an object.")
+                elif scheme.get("type") not in KNOWN_SECURITY_TYPES:
+                    add("error", where,
+                        f"Unknown security scheme type '{scheme.get('type')}'.",
+                        f"Expected one of: {', '.join(sorted(KNOWN_SECURITY_TYPES))}.")
+
+    security = card.get("security")
+    if security is not None:
+        if not isinstance(security, list):
+            add("error", "security", "'security' must be a list of requirement objects.")
+        else:
+            declared = set(schemes.keys()) if isinstance(schemes, dict) else set()
+            for i, requirement in enumerate(security):
+                if not isinstance(requirement, dict):
+                    add("error", f"security[{i}]", "Each security requirement must be an object.")
+                    continue
+                for ref in requirement:
+                    if ref not in declared:
+                        add("error", f"security[{i}].{ref}",
+                            f"References scheme '{ref}' which is not defined in securitySchemes.",
+                            "Every requirement must point at a declared scheme.")
+
     if not card.get("securitySchemes") and not card.get("security"):
         add("info", "securitySchemes",
             "Card declares no authentication — anyone can call this agent.",
