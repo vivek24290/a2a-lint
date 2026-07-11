@@ -64,7 +64,7 @@
   .finding.error .lvl { color: var(--err); } .finding.warn .lvl { color: var(--warn); }
   .finding.info .lvl { color: var(--info); }
   .finding .fld { font-family: Consolas, monospace; color: var(--accent); }
-  .finding .hint { color: var(--muted); margin-top: 2px; }
+  .finding .hint { color: var(--muted); margin-top: 2px; font-style: italic; }
   .console { padding: 0 32px 40px; }
   .console .bar2 { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
   #msg-text { flex: 1; min-width: 260px; background: var(--card); color: var(--text);
@@ -214,7 +214,7 @@ function renderFindings(d) {
       <div class="finding ${f.level}">
         <span class="lvl">${f.level}</span><span class="fld">${esc(f.field)}</span>
         <div>${esc(f.message)}</div>
-        ${f.hint ? `<div class="hint">↳ ${esc(f.hint)}</div>` : ""}
+        ${f.hint ? `<div class="hint">${esc(f.hint)}</div>` : ""}
       </div>`).join("")
     : '<div class="placeholder">Fully conformant — no findings. 🎉</div>');
 }
