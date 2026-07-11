@@ -1,7 +1,7 @@
 name: a2a-lint
-description: >
-  Validate that your A2A agent serves a spec-conformant agent card (and,
-  optionally, answers a live message/send) on every push.
+description: >-
+  Lint your A2A agent in CI: validate its agent card against the spec and
+  run a live message/send conformance probe.
 branding:
   icon: check-circle
   color: purple

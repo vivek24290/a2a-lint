@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "a2a-lint"
-version = "0.1.0"
+version = "0.1.1"
 description = "Conformance linter for A2A agents — agent card validation, live message/send probes, CI-friendly exit codes."
 readme = "README.md"
 license = { text = "MIT" }
