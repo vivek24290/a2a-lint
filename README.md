@@ -70,7 +70,7 @@ jobs:
   a2a-conformance:
     runs-on: ubuntu-latest
     steps:
-      - uses: vivek24290/a2a-lint@develop
+      - uses: vivek24290/a2a-lint@v1
         with:
           url: https://my-agent.example.com
           live: "true"
