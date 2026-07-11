@@ -1,0 +1,32 @@
+name: a2a-lint
+description: >
+  Validate that your A2A agent serves a spec-conformant agent card (and,
+  optionally, answers a live message/send) on every push.
+branding:
+  icon: check-circle
+  color: purple
+
+inputs:
+  url:
+    description: Base URL of the agent to lint (must be reachable from the runner)
+    required: true
+  live:
+    description: Also perform a live message/send round trip
+    default: "true"
+  strict:
+    description: Treat warnings as failures
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Install dependency
+      shell: bash
+      run: pip install --quiet "httpx>=0.27"
+    - name: Run a2a-lint
+      shell: bash
+      run: |
+        FLAGS=""
+        [ "${{ inputs.live }}" = "true" ] && FLAGS="$FLAGS --live"
+        [ "${{ inputs.strict }}" = "true" ] && FLAGS="$FLAGS --strict"
+        python "${{ github.action_path }}/server/a2a_lint.py" "${{ inputs.url }}" $FLAGS

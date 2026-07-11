@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>a2a-lint — A2A Agent Playground</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #141821; --card: #1b2130; --border: #2a3245;
+    --text: #e4e8f1; --muted: #94a0b8; --accent: #7c5cff; --accent2: #4bc0a9;
+    --err: #ff6b6b; --warn: #ffb454; --info: #6ea8fe; --code-bg: #0f131c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.5; }
+  header { padding: 26px 32px 6px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 24px; letter-spacing: .3px; }
+  header h1 .scope { color: var(--accent); }
+  header .tag { color: var(--muted); font-size: 14px; }
+  .bar { display: flex; gap: 10px; padding: 16px 32px; flex-wrap: wrap; align-items: center; }
+  #btn-stream { background: var(--accent2); }
+  .stream-event { font-family: Consolas, monospace; font-size: 13px; padding: 6px 10px;
+    border-left: 3px solid var(--accent2); background: var(--card); margin-top: 6px;
+    border-radius: 0 6px 6px 0; }
+  .stream-event .kind { color: var(--accent2); font-weight: 700; margin-right: 8px; }
+  #agent-url { flex: 1; min-width: 280px; background: var(--card); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; font-size: 15px; }
+  button { border: none; border-radius: 8px; padding: 11px 18px; font-size: 15px;
+    font-weight: 600; cursor: pointer; color: #fff; background: var(--accent); }
+  button.secondary { background: var(--card); border: 1px solid var(--border); font-weight: 400; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .chips { padding: 0 32px 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { font-size: 12.5px; color: var(--muted); background: var(--panel);
+    border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; cursor: pointer; }
+  .chip:hover { color: var(--text); border-color: var(--accent); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 10px 32px 24px; }
+  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .panel h2 { margin: 0 0 12px; font-size: 16px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px; }
+  .placeholder { color: var(--muted); font-size: 14px; }
+  .agent-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; flex-wrap: wrap; }
+  .agent-head .name { font-size: 20px; font-weight: 700; }
+  .badge { font-size: 11.5px; font-weight: 700; border-radius: 6px; padding: 3px 8px;
+    background: var(--card); border: 1px solid var(--border); color: var(--muted); }
+  .badge.on { color: var(--accent2); border-color: var(--accent2); }
+  .desc { color: var(--muted); font-size: 14px; margin-bottom: 12px; }
+  .skill { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px; }
+  .skill .sname { font-weight: 600; }
+  .skill .stags { color: var(--accent); font-size: 12.5px; }
+  .skill .sdesc { color: var(--muted); font-size: 13px; }
+  .grade { font-size: 34px; font-weight: 800; width: 58px; height: 58px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; }
+  .grade.A { background: #12351f; color: #4ade80; } .grade.B { background: #1c3325; color: #86efac; }
+  .grade.C { background: #3a2f12; color: var(--warn); } .grade.D, .grade.F { background: #3a1518; color: var(--err); }
+  .sumrow { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; }
+  .sumrow .counts { color: var(--muted); font-size: 14px; }
+  .finding { border-left: 3px solid var(--border); padding: 8px 12px; margin-bottom: 8px;
+    background: var(--card); border-radius: 0 8px 8px 0; font-size: 13.5px; }
+  .finding.error { border-left-color: var(--err); } .finding.warn { border-left-color: var(--warn); }
+  .finding.info { border-left-color: var(--info); }
+  .finding .lvl { font-weight: 700; text-transform: uppercase; font-size: 11px; margin-right: 8px; }
+  .finding.error .lvl { color: var(--err); } .finding.warn .lvl { color: var(--warn); }
+  .finding.info .lvl { color: var(--info); }
+  .finding .fld { font-family: Consolas, monospace; color: var(--accent); }
+  .finding .hint { color: var(--muted); margin-top: 2px; }
+  .console { padding: 0 32px 40px; }
+  .console .bar2 { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  #msg-text { flex: 1; min-width: 260px; background: var(--card); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; font-size: 15px; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px; overflow: auto; font-size: 12.5px; max-height: 380px; margin: 6px 0 0; }
+  details { margin-top: 8px; } summary { cursor: pointer; color: var(--info); font-size: 13.5px; }
+  .latency { color: var(--accent2); font-size: 13px; margin-left: 10px; }
+  .taskline { margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    font-size: 13.5px; color: var(--muted); }
+  .taskline code { color: var(--accent); }
+  .answer { background: var(--card); border-left: 4px solid var(--accent2); border-radius: 8px;
+    padding: 12px 14px; margin-top: 12px; font-size: 15px; }
+  .err-box { color: var(--err); font-size: 14px; }
+  footer { color: var(--muted); font-size: 12.5px; padding: 0 32px 28px; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>a2a-<span class="scope">lint</span></h1>
+  <span class="tag">Inspect, validate and talk to any A2A agent — Postman for the agent era</span>
+</header>
+
+<div class="bar">
+  <input id="agent-url" placeholder="Agent base URL, e.g. http://localhost:8001" value="">
+  <button id="btn-inspect" onclick="inspect()">Inspect agent</button>
+  <button id="btn-share" class="secondary" onclick="shareSession()" disabled>Share permalink</button>
+</div>
+<div class="chips" id="chips">
+  <span class="chip" onclick="fill('http://localhost:8001')">demo: weather agent :8001</span>
+  <span class="chip" onclick="fill('http://localhost:8002')">demo: planner agent :8002</span>
+</div>
+
+<div class="grid">
+  <div class="panel">
+    <h2>Agent Card</h2>
+    <div id="card-out"><span class="placeholder">Inspect an agent to see its card.</span></div>
+  </div>
+  <div class="panel">
+    <h2>Conformance</h2>
+    <div id="findings-out"><span class="placeholder">Validation findings appear here.</span></div>
+  </div>
+</div>
+
+<div class="console panel" style="margin: 0 32px 26px;">
+  <h2>Message Console</h2>
+  <div class="bar2">
+    <input id="msg-text" placeholder='Say something to the agent, e.g. "What is the weather in Tokyo?"'>
+    <button id="btn-send" onclick="send()" disabled>Send message/send</button>
+    <button id="btn-stream" onclick="streamMsg()" disabled
+      title="Enabled when the agent card declares streaming support">Stream message/stream</button>
+  </div>
+  <div id="send-out"><span class="placeholder">Inspect an agent first, then send it a message.</span></div>
+</div>
+
+<footer>
+  a2a-lint speaks the <a href="https://a2a-protocol.org">A2A protocol</a> (agent card discovery,
+  JSON-RPC message/send, tasks/get). Point it at any agent — local or remote.
+</footer>
+
+<script>
+let endpoint = null;   // where message/send goes — taken from the inspected card
+let fallbackEndpoint = null;   // the URL the user actually inspected, if it differs
+let lastInspect = null;        // last successful inspect result, for permalinks
+
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const pretty = o => esc(JSON.stringify(o, null, 2));
+const $ = id => document.getElementById(id);
+
+function fill(url) { $("agent-url").value = url; inspect(); }
+
+async function api(path, body) {
+  const r = await fetch(path, { method: "POST",
+    headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(`server returned HTTP ${r.status}`);
+  return r.json();
+}
+
+async function inspect() {
+  const url = $("agent-url").value.trim();
+  if (!url) return;
+  const btn = $("btn-inspect");
+  btn.disabled = true;
+  $("card-out").innerHTML = '<span class="placeholder">Probing…</span>';
+  $("findings-out").innerHTML = "";
+  try {
+    const d = await api("/api/inspect", { url });
+    if (!d.ok) {
+      $("card-out").innerHTML = `<div class="err-box">${esc(d.error)}</div>` +
+        (d.attempts || []).map(a => `<div class="finding error"><span class="fld">${esc(a.url)}</span><div class="hint">${esc(a.error)}</div></div>`).join("");
+      endpoint = null; lastInspect = null;
+      $("btn-send").disabled = true; $("btn-share").disabled = true; $("btn-stream").disabled = true;
+      return;
+    }
+    renderCard(d);
+    renderFindings(d);
+    // A2A clients send to the URL the card advertises. If that differs from
+    // the URL we inspected (e.g. a container-internal hostname), keep the
+    // inspected URL as a fallback so the console still works — and say so.
+    endpoint = d.card.url || url;
+    const base = url.replace(/\/+$/, "") + "/";
+    fallbackEndpoint = endpoint.replace(/\/+$/, "") + "/" !== base ? base : null;
+    lastInspect = { url, inspect: d };
+    $("btn-send").disabled = false;
+    $("btn-share").disabled = false;
+    $("btn-stream").disabled = !(d.card.capabilities && d.card.capabilities.streaming);
+    const ex = d.card.skills?.[0]?.examples?.[0];
+    if (ex) $("msg-text").value = ex;
+  } catch (e) {
+    $("card-out").innerHTML = `<div class="err-box">${esc(e.message)}</div>`;
+  } finally { btn.disabled = false; }
+}
+
+function renderCard(d) {
+  const c = d.card, caps = c.capabilities || {};
+  $("card-out").innerHTML = `
+    <div class="agent-head">
+      <span class="name">${esc(c.name || "(unnamed agent)")}</span>
+      <span class="badge">v${esc(c.version || "?")}</span>
+      <span class="badge">${esc(c.preferredTransport || "transport?")}</span>
+      <span class="badge ${caps.streaming ? "on" : ""}">streaming ${caps.streaming ? "✓" : "✗"}</span>
+      <span class="badge ${caps.pushNotifications ? "on" : ""}">push ${caps.pushNotifications ? "✓" : "✗"}</span>
+      <span class="latency">card in ${d.latencyMs} ms</span>
+    </div>
+    <div class="desc">${esc(c.description || "")}</div>
+    ${(c.skills || []).map(s => `
+      <div class="skill">
+        <span class="sname">${esc(s.name || s.id || "?")}</span>
+        <span class="stags">${esc((s.tags || []).map(t => "#" + t).join(" "))}</span>
+        <div class="sdesc">${esc(s.description || "")}</div>
+      </div>`).join("")}
+    <details><summary>Raw agent card (${esc(d.cardUrl)})</summary><pre>${pretty(c)}</pre></details>`;
+}
+
+function renderFindings(d) {
+  const s = d.summary;
+  $("findings-out").innerHTML = `
+    <div class="sumrow">
+      <div class="grade ${s.grade}">${s.grade}</div>
+      <div class="counts">${s.errors} error(s) · ${s.warnings} warning(s) ·
+        ${d.findings.length - s.errors - s.warnings} note(s)</div>
+    </div>` +
+    (d.findings.length ? d.findings.map(f => `
+      <div class="finding ${f.level}">
+        <span class="lvl">${f.level}</span><span class="fld">${esc(f.field)}</span>
+        <div>${esc(f.message)}</div>
+        ${f.hint ? `<div class="hint">↳ ${esc(f.hint)}</div>` : ""}
+      </div>`).join("")
+    : '<div class="placeholder">Fully conformant — no findings. 🎉</div>');
+}
+
+async function send() {
+  if (!endpoint) return;
+  const btn = $("btn-send");
+  btn.disabled = true;
+  $("send-out").innerHTML = '<span class="placeholder">Sending…</span>';
+  try {
+    const text = $("msg-text").value || "Hello";
+    let d = await api("/api/send", { endpoint, text });
+    let fallbackNote = "";
+    if (!d.ok && fallbackEndpoint) {
+      d = await api("/api/send", { endpoint: fallbackEndpoint, text });
+      fallbackNote = `<div class="finding warn"><span class="lvl">warn</span><span class="fld">card.url</span>
+        <div>The card advertises <code>${esc(endpoint)}</code>, which is not reachable from here —
+        fell back to the inspected URL. Other A2A clients WILL fail against this agent:
+        fix the card's advertised URL for its real audience.</div></div>`;
+    }
+    if (!d.ok) { $("send-out").innerHTML = `<div class="err-box">${esc(d.error)}</div>`; return; }
+    endpoint = d.endpoint;   // keep using whichever endpoint actually worked
+    const task = d.response.result;
+    let answer = "", taskline = "";
+    if (task && task.kind === "task") {
+      const texts = (task.artifacts || []).flatMap(a => (a.parts || []))
+        .filter(p => p.kind === "text").map(p => p.text);
+      if (texts.length) answer = `<div class="answer">🤖 ${esc(texts.join(" "))}</div>`;
+      taskline = `<div class="taskline">task <code>${esc(task.id)}</code> ·
+        state <code>${esc(task.status?.state || "?")}</code>
+        <button class="secondary" onclick="getTask('${esc(task.id)}')">tasks/get</button></div>`;
+    } else if (d.response.error) {
+      answer = `<div class="err-box">JSON-RPC error ${esc(d.response.error.code)}: ${esc(d.response.error.message)}</div>`;
+    }
+    $("send-out").innerHTML = `
+      <span class="latency">POST ${esc(d.endpoint)} → HTTP ${d.httpStatus} in ${d.latencyMs} ms</span>
+      ${fallbackNote}${answer}${taskline}
+      <details><summary>JSON-RPC request</summary><pre>${pretty(d.request)}</pre></details>
+      <details open><summary>JSON-RPC response</summary><pre>${pretty(d.response)}</pre></details>`;
+  } catch (e) {
+    $("send-out").innerHTML = `<div class="err-box">${esc(e.message)}</div>`;
+  } finally { btn.disabled = false; }
+}
+
+async function getTask(taskId) {
+  const d = await api("/api/task", { endpoint, taskId });
+  const box = document.createElement("div");
+  box.innerHTML = d.ok
+    ? `<details open><summary>tasks/get ${esc(taskId)} (${d.latencyMs} ms)</summary><pre>${pretty(d.response)}</pre></details>`
+    : `<div class="err-box">${esc(d.error)}</div>`;
+  $("send-out").appendChild(box);
+}
+
+async function streamMsg() {
+  if (!endpoint) return;
+  const btn = $("btn-stream");
+  btn.disabled = true;
+  const out = $("send-out");
+  out.innerHTML = '<span class="placeholder">Streaming…</span>';
+  const events = [];
+  let lastTaskId = null, request = null;
+
+  function describe(result) {
+    if (result.kind === "task") { lastTaskId = result.id;
+      return `task created — state <b>${esc(result.status?.state)}</b> · id <code>${esc(result.id)}</code>`; }
+    if (result.kind === "status-update") { lastTaskId = result.taskId;
+      return `state → <b>${esc(result.status?.state)}</b>${result.final ? " · <b>final</b>" : ""}`; }
+    if (result.kind === "artifact-update") {
+      const texts = (result.artifact?.parts || []).filter(p => p.kind === "text").map(p => p.text);
+      return `artifact <b>${esc(result.artifact?.name || "?")}</b>` +
+        (texts.length ? ` — “${esc(texts.join(" "))}”` : "");
+    }
+    return esc(JSON.stringify(result).slice(0, 120));
+  }
+  function render() {
+    out.innerHTML =
+      events.map(e => `<div class="stream-event"><span class="kind">${e.kind}</span>${e.text}</div>`).join("") +
+      (lastTaskId ? `<div class="taskline">streamed task <code>${esc(lastTaskId)}</code>
+         <button class="secondary" onclick="getTask('${esc(lastTaskId)}')">tasks/get</button></div>` : "") +
+      (request ? `<details><summary>JSON-RPC request (message/stream)</summary><pre>${pretty(request)}</pre></details>` : "");
+  }
+
+  try {
+    const resp = await fetch("/api/stream", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint, text: $("msg-text").value || "Hello" }) });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let sep;
+      while ((sep = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, sep); buf = buf.slice(sep + 2);
+        const evLine = chunk.split("\n").find(l => l.startsWith("event:"));
+        const data = chunk.split("\n").filter(l => l.startsWith("data:"))
+          .map(l => l.slice(5).trim()).join("");
+        if (!data) continue;
+        const parsed = JSON.parse(data);
+        const evName = evLine ? evLine.slice(6).trim() : null;
+        if (evName === "request") { request = parsed; }
+        else if (evName === "proxy-error") { events.push({ kind: "error", text: esc(parsed.error) }); }
+        else if (parsed.result) { events.push({ kind: parsed.result.kind || "event", text: describe(parsed.result) }); }
+        else if (parsed.error) { events.push({ kind: "rpc-error", text: esc(parsed.error.message) }); }
+        render();
+      }
+    }
+    render();
+  } catch (e) {
+    out.innerHTML = `<div class="err-box">${esc(e.message)}</div>`;
+  } finally { btn.disabled = false; }
+}
+
+async function shareSession() {
+  if (!lastInspect) return;
+  const d = await api("/api/share", lastInspect);
+  const link = `${location.origin}/?s=${d.id}`;
+  try { await navigator.clipboard.writeText(link); } catch (_) {}
+  const btn = $("btn-share");
+  const old = btn.textContent;
+  btn.textContent = "Link copied!";
+  setTimeout(() => { btn.textContent = old; }, 2500);
+  history.replaceState(null, "", `/?s=${d.id}`);
+}
+
+async function loadShared() {
+  const sid = new URLSearchParams(location.search).get("s");
+  if (!sid) return;
+  try {
+    const r = await fetch(`/api/session/${sid}`);
+    if (!r.ok) return;
+    const s = await r.json();
+    $("agent-url").value = s.url;
+    renderCard(s.inspect);
+    renderFindings(s.inspect);
+    $("card-out").insertAdjacentHTML("afterbegin",
+      `<div class="finding info"><span class="lvl">info</span>
+       Shared snapshot — click "Inspect agent" for a live view.</div>`);
+    lastInspect = { url: s.url, inspect: s.inspect };
+    $("btn-share").disabled = false;
+  } catch (_) { /* stale link — leave the empty state */ }
+}
+
+$("msg-text").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+$("agent-url").addEventListener("keydown", e => { if (e.key === "Enter") inspect(); });
+loadShared();
+</script>
+</body>
+</html>
